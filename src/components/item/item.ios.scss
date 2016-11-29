@@ -168,7 +168,8 @@ $item-ios-sliding-content-background:     $list-ios-background-color !default;
   border-radius: $item-ios-avatar-size / 2;
 }
 
-.item-ios ion-thumbnail {
+.item-ios ion-thumbnail,
+.item-ios ion-thumbnail ion-img {
   min-width: $item-ios-thumbnail-size;
   min-height: $item-ios-thumbnail-size;
 }

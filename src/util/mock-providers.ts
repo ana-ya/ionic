@@ -3,13 +3,16 @@ import { Location } from '@angular/common';
 
 import { AnimationOptions } from '../animations/animation';
 import { App } from '../components/app/app';
-import { IonicApp } from '../components/app/app-root';
 import { Config } from '../config/config';
+import { Content } from '../components/content/content';
 import { DeepLinker } from '../navigation/deep-linker';
+import { DomOp } from './dom-operation';
 import { GestureController } from '../gestures/gesture-controller';
+import { Haptic } from './haptic';
+import { IonicApp } from '../components/app/app-root';
 import { Keyboard } from './keyboard';
 import { Menu } from '../components/menu/menu';
-import { ViewState, DeepLinkConfig } from '../navigation/nav-util';
+import { NavControllerBase } from '../navigation/nav-controller-base';
 import { OverlayPortal } from '../components/nav/overlay-portal';
 import { PageTransition } from '../transitions/page-transition';
 import { Platform } from '../platform/platform';
@@ -19,9 +22,8 @@ import { Tabs }  from '../components/tabs/tabs';
 import { TransitionController } from '../transitions/transition-controller';
 import { UrlSerializer } from '../navigation/url-serializer';
 import { ViewController } from '../navigation/view-controller';
+import { ViewState, DeepLinkConfig } from '../navigation/nav-util';
 
-import { NavControllerBase } from '../navigation/nav-controller-base';
-import { Haptic } from './haptic';
 
 export const mockConfig = function(config?: any, url: string = '/', platform?: Platform) {
   const c = new Config();
@@ -29,6 +31,15 @@ export const mockConfig = function(config?: any, url: string = '/', platform?: P
   const p = platform || mockPlatform();
   c.init(config, q, p);
   return c;
+};
+
+export const mockDomOp = function(): DomOp {
+  const dom: any = {
+    read: function(fn: Function, ctx?: any) {},
+    write: function(fn: Function, ctx?: any) {},
+    cancel: function(fn: Function, ctx?: any) {}
+  };
+  return dom;
 };
 
 export const mockQueryParams = function(url: string = '/') {
@@ -68,6 +79,10 @@ export const mockTrasitionController = function(config: Config) {
     return trns;
   };
   return trnsCtrl;
+};
+
+export const mockContent = function(): Content {
+  return new Content(mockConfig(), mockElementRef(), mockRenderer(), null, null, mockZone(), null, null, mockDomOp());
 };
 
 export const mockZone = function(): NgZone {

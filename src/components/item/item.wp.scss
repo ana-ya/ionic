@@ -200,7 +200,8 @@ $item-wp-sliding-content-background: $list-wp-background-color !default;
   border-radius: $item-wp-avatar-size / 2;
 }
 
-.item-wp ion-thumbnail {
+.item-wp ion-thumbnail,
+.item-wp ion-thumbnail ion-img {
   min-width: $item-wp-thumbnail-size;
   min-height: $item-wp-thumbnail-size;
 }

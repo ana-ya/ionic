@@ -1,6 +1,6 @@
-import { Content } from '../../content/content';
+import { Content, ScrollEvent } from '../../content/content';
 import { InfiniteScroll } from '../infinite-scroll';
-import { mockConfig, mockElementRef, mockRenderer, mockZone } from '../../../util/mock-providers';
+import { mockDomOp, mockConfig, mockElementRef, mockRenderer, mockZone } from '../../../util/mock-providers';
 
 
 describe('Infinite Scroll', () => {
@@ -17,7 +17,7 @@ describe('Infinite Scroll', () => {
 
       setInfiniteScrollTop(300);
 
-      var result = inf._onScroll();
+      var result = inf._onScroll(ev);
       expect(result).toEqual(6);
     });
 
@@ -30,37 +30,38 @@ describe('Infinite Scroll', () => {
 
       setInfiniteScrollTop(300);
 
-      var result = inf._onScroll();
+      var result = inf._onScroll(ev);
       expect(result).toEqual(5);
     });
 
     it('should not run if there is not infinite element height', () => {
       setInfiniteScrollTop(0);
-      var result = inf._onScroll();
+      var result = inf._onScroll(ev);
       expect(result).toEqual(3);
     });
 
     it('should not run again if ran less than 32ms ago', () => {
+      ev.timeStamp = Date.now();
       inf._lastCheck = Date.now();
-      var result = inf._onScroll();
+      var result = inf._onScroll(ev);
       expect(result).toEqual(2);
     });
 
     it('should not run if state is disabled', () => {
       inf.state = 'disabled';
-      var result = inf._onScroll();
+      var result = inf._onScroll(ev);
       expect(result).toEqual(1);
     });
 
     it('should not run if state is loading', () => {
       inf.state = 'loading';
-      var result = inf._onScroll();
+      var result = inf._onScroll(ev);
       expect(result).toEqual(1);
     });
 
     it('should not run if not enabled', () => {
       inf.state = 'disabled';
-      var result = inf._onScroll();
+      var result = inf._onScroll(ev);
       expect(result).toEqual(1);
     });
 
@@ -95,15 +96,16 @@ describe('Infinite Scroll', () => {
   let content: Content;
   let contentElementRef;
   let infiniteElementRef;
+  let ev: ScrollEvent = {};
 
   beforeEach(() => {
     contentElementRef = mockElementRef();
-    content = new Content(config, contentElementRef, mockRenderer(), null, null, null, null, null);
+    content = new Content(config, contentElementRef, mockRenderer(), null, null, null, null, null, mockDomOp());
     content._scrollEle = document.createElement('div');
     content._scrollEle.className = 'scroll-content';
 
     infiniteElementRef = mockElementRef();
-    inf = new InfiniteScroll(content, mockZone(), infiniteElementRef);
+    inf = new InfiniteScroll(content, mockZone(), infiniteElementRef, mockDomOp());
   });
 
   function setInfiniteScrollTop(scrollTop) {

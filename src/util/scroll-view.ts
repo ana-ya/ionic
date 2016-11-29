@@ -1,27 +1,318 @@
-import { CSS, pointerCoord, nativeRaf, rafFrames, cancelRaf } from '../util/dom';
+import { Subject } from 'rxjs/Subject';
+
+import { assert } from './util';
+import { CSS, pointerCoord, rafFrames } from './dom';
+import { DomOp } from './dom-operation';
+import { eventOptions, listenEvent } from './ui-event-manager';
 
 
 export class ScrollView {
+  isScrolling = false;
+  scrollStart = new Subject<ScrollEvent>();
+  scroll = new Subject<ScrollEvent>();
+  scrollEnd = new Subject<ScrollEvent>();
+
   private _el: HTMLElement;
   private _js: boolean = false;
   private _top: number = 0;
-  private _pos: Array<number>;
-  private _velocity: number;
-  private _max: number;
-  private _rafId: number;
-  private _cb: Function;
-  isPlaying: boolean;
+  private _scLsn: Function;
+  private _endTmr: Function;
+  private _ev: ScrollEvent = {};
 
-  constructor(ele: HTMLElement) {
+
+  constructor(ele: HTMLElement, private _dom: DomOp) {
+    assert(ele, 'scroll-view, element can not be null');
     this._el = ele;
+    this.enableNativeScrolling();
   }
 
-  getTop(): number {
+  private enableNativeScrolling() {
+    this._scLsn && this._scLsn();
+
+    const opts = eventOptions(false, true);
+    const positions: number[] = [];
+    let directionY: string = 'down';
+    let directionX: string = null;
+
+    const run = (timeStamp: number) => {
+      // get the current scrollTop
+      // ******** DOM READ ****************
+      var top = this.getTop();
+
+      // get the current scrollLeft
+      // ******** DOM READ ****************
+      var left = this.getLeft();
+
+      if (!this.isScrolling) {
+        // currently not scrolling, so this is a scroll start
+        this.isScrolling = true;
+        positions.length = 0;
+        positions.push(top, left, timeStamp);
+
+        this._scrollEvent(EVENT_SCROLL_START, top, left, timeStamp, 0, 0, directionY, directionX);
+
+      } else {
+        // still actively scrolling
+        positions.push(top, left, timeStamp);
+
+        var endPos = (positions.length - 1);
+        var startPos = endPos;
+        var timeRange = (timeStamp - 100);
+        var velocityY = 0;
+        var velocityX = 0;
+
+        // move pointer to position measured 100ms ago
+        for (var i = endPos; i > 0 && positions[i] > timeRange; i -= 3) {
+          startPos = i;
+        }
+
+        if (startPos !== endPos) {
+          // compute relative movement between these two points
+          var timeOffset = (positions[endPos] - positions[startPos]);
+          var movedTop = (positions[startPos - 2] - positions[endPos - 2]);
+          var movedLeft = (positions[startPos - 1] - positions[endPos - 1]);
+
+          // based on XXms compute the movement to apply for each render step
+          velocityY = ((movedTop / timeOffset) * FRAME_MS);
+          velocityX = ((movedLeft / timeOffset) * FRAME_MS);
+
+          directionY = (movedTop <= 0 ? 'down' : 'up');
+          directionX = (movedLeft <= 0 ? 'left' : 'right');
+        }
+
+        this._scrollEvent(EVENT_SCROLL, top, left, timeStamp, velocityY, velocityX, directionY, directionX);
+      }
+
+      // debounce then emit on the last scroll event
+      this._endTmr && this._endTmr();
+      this._endTmr = rafFrames(6, (rafTimeStamp) => {
+        // haven't scrolled in a while, so it's a scrollend
+        this.isScrolling = false;
+        positions.length = 0;
+        this._scrollEvent(EVENT_SCROLL_END, top, left, rafTimeStamp, 0, 0, directionY, directionX);
+      });
+
+    };
+
+    // assign the raw scroll listener
+    // note that it does not have a wrapping requestAnimationFrame on purpose
+    // a scroll event callback will always be right before the raf callback
+    // so there's little to no value of using raf here since it'll all ways immediately
+    // call the raf if it was set within the scroll event, so this will save us some time
+    this._scLsn = listenEvent(this._el, EVENT_SCROLL, false, opts, () => {
+      this._dom.read(timeStamp => {
+        run(timeStamp);
+      });
+    });
+  }
+
+  /**
+   * @private
+   */
+  private _scrollEvent(eventType: string, top: number, left: number, timeStamp: number, velocityY: number, velocityX: number, directionY: string, directionX: string) {
+    const ev = this._ev;
+
+    ev.type = eventType;
+    ev.timeStamp = timeStamp;
+    ev.scrollTop = top;
+    ev.scrollLeft = left;
+    ev.velocityY = velocityY;
+    ev.velocityX = velocityX;
+    ev.directionY = directionY;
+    ev.directionX = directionX;
+
+    if (eventType === EVENT_SCROLL_START) {
+      // remember the start positions
+      ev.startY = ev.scrollTop;
+      ev.startX = ev.scrollLeft;
+
+      // forget the deltas
+      ev.deltaY = ev.deltaX = 0;
+
+      // emit only on the first scroll event
+      this.scrollStart.next(ev);
+    }
+
+    if (eventType === EVENT_SCROLL_START || eventType === EVENT_SCROLL) {
+      ev.deltaY = (ev.scrollTop - ev.startY);
+      ev.deltaX = (ev.scrollLeft - ev.startX);
+
+      // emit on each scrollstart or just scroll events
+      // should not fire on scrollend event
+      this.scroll.next(ev);
+
+    } else if (eventType === EVENT_SCROLL_END) {
+      // another scroll event hasn't happened for a while
+      // so we must have stopped scrolling
+      // emit scroll end
+      this.scrollEnd.next(ev);
+    }
+  }
+
+  /**
+   * @private
+   * JS Scrolling has been provided only as a temporary solution
+   * until iOS apps can take advantage of scroll events at all times.
+   * The goal is to eventually remove JS scrolling entirely. When we
+   * no longer have to worry about iOS not firing scroll events during
+   * inertia then this can be burned to the ground. iOS's more modern
+   * WKWebView does not have this issue, only UIWebView does.
+   */
+  enableJsScroll() {
+    this._js = true;
+    const ele = this._el;
+    const positions: number[] = [];
+    let rafCancel: Function;
+    let max: number;
+    let velocityY = 0;
+    let directionY: string = 'down';
+
+    // stop listening for actual scroll events
+    this._scLsn();
+
+    const setMax = () => {
+      if (!max) {
+        // ******** DOM READ ****************
+        max = (ele.offsetHeight - ele.parentElement.offsetHeight + ele.parentElement.offsetTop);
+      }
+    };
+
+    const decelerate = (timeStamp: number) => {
+      console.debug(`scroll-view, decelerate, velocity: ${velocityY}`);
+      if (velocityY) {
+        velocityY *= DECELERATION_FRICTION;
+
+        // update top with updated velocity
+        // clamp top within scroll limits
+        this._top = Math.min(Math.max(this._top + velocityY, 0), max);
+
+        // ******** DOM READ ****************
+        this._scrollEvent(EVENT_SCROLL, this._top, 0, timeStamp, velocityY, 0, directionY, null);
+
+        this._dom.write(() => {
+          // ******** DOM WRITE ****************
+          this.setTop(this._top);
+
+          if (this._top > 0 && this._top < max && Math.abs(velocityY) > MIN_VELOCITY_CONTINUE_DECELERATION) {
+            rafCancel = this._dom.read((rafTimeStamp: number) => {
+              decelerate(rafTimeStamp);
+            });
+
+          } else {
+            this.isScrolling = false;
+            this._scrollEvent(EVENT_SCROLL_END, this._top, 0, timeStamp, velocityY, 0, directionY, null);
+          }
+        });
+      }
+    };
+
+    const touchStart = (touchEvent: TouchEvent) => {
+      velocityY = 0;
+      positions.length = 0;
+      max = null;
+      positions.push(pointerCoord(touchEvent).y, touchEvent.timeStamp);
+    };
+
+    const touchMove = (touchEvent: TouchEvent) =>  {
+      if (!positions.length) {
+        return;
+      }
+
+      var y = pointerCoord(touchEvent).y;
+
+      // ******** DOM READ ****************
+      setMax();
+
+      this._top -= (y - positions[positions.length - 2]);
+
+      this._top = Math.min(Math.max(this._top, 0), max);
+
+      positions.push(y, touchEvent.timeStamp);
+
+      if (!this.isScrolling) {
+        this.isScrolling = true;
+        this._scrollEvent(EVENT_SCROLL_START, this._top, 0, touchEvent.timeStamp, velocityY, 0, directionY, null);
+      }
+
+      this._scrollEvent(EVENT_SCROLL, this._top, 0, touchEvent.timeStamp, velocityY, 0, directionY, null);
+
+      this._dom.write(() => {
+        // ******** DOM WRITE ****************
+        this.setTop(this._top);
+      });
+    };
+
+    const touchEnd = (touchEvent: TouchEvent) => {
+      // figure out what the scroll position was about 100ms ago
+      velocityY = 0;
+      this._dom.cancel(rafCancel);
+
+      if (!positions.length) return;
+
+      var y = pointerCoord(touchEvent).y;
+
+      positions.push(y, touchEvent.timeStamp);
+
+      var endPos = (positions.length - 1);
+      var startPos = endPos;
+      var timeRange = (touchEvent.timeStamp - 100);
+
+      // move pointer to position measured 100ms ago
+      for (var i = endPos; i > 0 && positions[i] > timeRange; i -= 2) {
+        startPos = i;
+      }
+
+      if (startPos !== endPos) {
+        // compute relative movement between these two points
+        var timeOffset = (positions[endPos] - positions[startPos]);
+        var movedTop = (positions[startPos - 1] - positions[endPos - 1]);
+
+        // based on XXms compute the movement to apply for each render step
+        velocityY = ((movedTop / timeOffset) * FRAME_MS);
+
+        // verify that we have enough velocity to start deceleration
+        if (Math.abs(velocityY) > MIN_VELOCITY_START_DECELERATION) {
+          // ******** DOM READ ****************
+          setMax();
+
+          rafCancel = this._dom.read((rafTimeStamp: number) => {
+            decelerate(rafTimeStamp);
+          });
+        }
+      }
+
+      positions.length = 0;
+    };
+
+    const opts = eventOptions(false, true);
+    const unRegStart = listenEvent(ele, 'touchstart', false, opts, touchStart);
+    const unRegMove = listenEvent(ele, 'touchmove', false, opts, touchMove);
+    const unRegEnd = listenEvent(ele, 'touchend', false, opts, touchEnd);
+
+    ele.parentElement.classList.add('js-scroll');
+
+    // create an unregister for all of these events
+    this._scLsn = () => {
+      unRegStart();
+      unRegMove();
+      unRegEnd();
+      ele.parentElement.classList.remove('js-scroll');
+    };
+  }
+
+
+  getTop() {
     if (this._js) {
       return this._top;
     }
-
     return this._top = this._el.scrollTop;
+  }
+
+  getLeft() {
+    if (this._js) {
+      return 0;
+    }
+    return this._el.scrollLeft;
   }
 
   setTop(top: number) {
@@ -68,17 +359,17 @@ export class ScrollView {
     let attempts = 0;
 
     // scroll loop
-    function step() {
+    function step(timeStamp: number) {
       attempts++;
 
-      if (!self._el || !self.isPlaying || attempts > maxAttempts) {
-        self.isPlaying = false;
+      if (!self._el || !self.isScrolling || attempts > maxAttempts) {
+        self.isScrolling = false;
         self._el.style.transform = ``;
         done();
         return;
       }
 
-      let time = Math.min(1, ((Date.now() - startTime) / duration));
+      let time = Math.min(1, ((timeStamp - startTime) / duration));
 
       // where .5 would be 50% of time on a linear scale easedT gives a
       // fraction based on the easing method
@@ -93,7 +384,7 @@ export class ScrollView {
       }
 
       if (easedT < 1) {
-        nativeRaf(step);
+        this._raf.read(step);
 
       } else {
         self._el.style.transform = ``;
@@ -102,12 +393,12 @@ export class ScrollView {
     }
 
     // start scroll loop
-    self.isPlaying = true;
+    self.isScrolling = true;
 
     // chill out for a frame first
-    rafFrames(2, () => {
-      startTime = Date.now();
-      step();
+    rafFrames(2, (timeStamp) => {
+      startTime = timeStamp;
+      step(timeStamp);
     });
 
     return promise;
@@ -126,168 +417,52 @@ export class ScrollView {
   }
 
   stop() {
-    this.isPlaying = false;
-  }
-
-  /**
-   * @private
-   * JS Scrolling has been provided only as a temporary solution
-   * until iOS apps can take advantage of scroll events at all times.
-   * The goal is to eventually remove JS scrolling entirely. This
-   * method may be removed in the future.
-   */
-  jsScroll(onScrollCallback: Function): Function {
-    this._js = true;
-    this._cb = onScrollCallback;
-    this._pos = [];
-
-    if (this._el) {
-      this._el.addEventListener('touchstart', this._start.bind(this));
-      this._el.addEventListener('touchmove', this._move.bind(this));
-      this._el.addEventListener('touchend', this._end.bind(this));
-      this._el.parentElement.classList.add('js-scroll');
-    }
-
-    return () => {
-      if (this._el) {
-        this._el.removeEventListener('touchstart', this._start.bind(this));
-        this._el.removeEventListener('touchmove', this._move.bind(this));
-        this._el.removeEventListener('touchend', this._end.bind(this));
-        this._el.parentElement.classList.remove('js-scroll');
-      }
-    };
-  }
-
-  /**
-   * @private
-   * Used for JS scrolling. May be removed in the future.
-   */
-  private _start(ev: UIEvent) {
-    this._velocity = 0;
-    this._pos.length = 0;
-    this._max = null;
-    this._pos.push(pointerCoord(ev).y, Date.now());
-  }
-
-  /**
-   * @private
-   * Used for JS scrolling. May be removed in the future.
-   */
-  private _move(ev: UIEvent) {
-    if (this._pos.length) {
-      let y = pointerCoord(ev).y;
-
-      // ******** DOM READ ****************
-      this._setMax();
-
-      this._top -= (y - this._pos[this._pos.length - 2]);
-
-      this._top = Math.min(Math.max(this._top, 0), this._max);
-
-      this._pos.push(y, Date.now());
-
-      // ******** DOM READ THEN DOM WRITE ****************
-      this._cb(this._top);
-
-      // ******** DOM WRITE ****************
-      this.setTop(this._top);
-    }
-  }
-
-  /**
-   * @private
-   * Used for JS scrolling. May be removed in the future.
-   */
-  private _setMax() {
-    if (!this._max) {
-      // ******** DOM READ ****************
-      this._max = (this._el.offsetHeight - this._el.parentElement.offsetHeight + this._el.parentElement.offsetTop);
-    }
-  }
-
-  /**
-   * @private
-   * Used for JS scrolling. May be removed in the future.
-   */
-  private _end(ev: UIEvent) {
-    // figure out what the scroll position was about 100ms ago
-    let positions = this._pos;
-    this._velocity = 0;
-    cancelRaf(this._rafId);
-
-    if (!positions.length) return;
-
-    let y = pointerCoord(ev).y;
-
-    positions.push(y, Date.now());
-
-    let endPos = (positions.length - 1);
-    let startPos = endPos;
-    let timeRange = (Date.now() - 100);
-
-    // move pointer to position measured 100ms ago
-    for (var i = endPos; i > 0 && positions[i] > timeRange; i -= 2) {
-      startPos = i;
-    }
-
-    if (startPos !== endPos) {
-      // compute relative movement between these two points
-      let timeOffset = (positions[endPos] - positions[startPos]);
-      let movedTop = (positions[startPos - 1] - positions[endPos - 1]);
-
-      // based on XXms compute the movement to apply for each render step
-      this._velocity = ((movedTop / timeOffset) * FRAME_MS);
-
-      // verify that we have enough velocity to start deceleration
-      if (Math.abs(this._velocity) > MIN_VELOCITY_START_DECELERATION) {
-        // ******** DOM READ ****************
-        this._setMax();
-
-        this._rafId = nativeRaf(this._decelerate.bind(this));
-      }
-    }
-
-    positions.length = 0;
-  }
-
-  /**
-   * @private
-   * Used for JS scrolling. May be removed in the future.
-   */
-  private _decelerate() {
-    var self = this;
-
-    if (self._velocity) {
-      self._velocity *= DECELERATION_FRICTION;
-
-      // update top with updated velocity
-      // clamp top within scroll limits
-      self._top = Math.min(Math.max(self._top + self._velocity, 0), self._max);
-
-      // ******** DOM READ THEN DOM WRITE ****************
-      self._cb(self._top);
-
-      // ******** DOM WRITE ****************
-      self.setTop(self._top);
-
-      if (self._top > 0 && self._top < self._max && Math.abs(self._velocity) > MIN_VELOCITY_CONTINUE_DECELERATION) {
-        self._rafId = nativeRaf(self._decelerate.bind(self));
-      }
-    }
+    this.isScrolling = false;
   }
 
   /**
    * @private
    */
   destroy() {
-    this._velocity = 0;
+    this.scrollStart.unsubscribe();
+    this.scroll.unsubscribe();
+    this.scrollEnd.unsubscribe();
+
     this.stop();
-    this._el = null;
+    this._scLsn();
+    this._endTmr && this._endTmr();
+    this._el = this._dom = null;
   }
 
 }
+
+
+export interface ScrollEvent {
+  type?: string;
+  scrollTop?: number;
+  scrollLeft?: number;
+  startY?: number;
+  startX?: number;
+  deltaY?: number;
+  deltaX?: number;
+  timeStamp?: number;
+  velocityY?: number;
+  velocityX?: number;
+  directionY?: string;
+  directionX?: string;
+}
+
+
+export interface DomFn {
+  (callback: Function): void;
+}
+
 
 const MIN_VELOCITY_START_DECELERATION = 4;
 const MIN_VELOCITY_CONTINUE_DECELERATION = 0.12;
 const DECELERATION_FRICTION = 0.97;
 const FRAME_MS = (1000 / 60);
+
+const EVENT_SCROLL_START = 'scrollstart';
+const EVENT_SCROLL = 'scroll';
+const EVENT_SCROLL_END = 'scrollend';

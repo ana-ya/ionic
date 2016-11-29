@@ -6,18 +6,28 @@ import { IonicApp, IonicModule } from '../../../..';
   templateUrl: 'main.html'
 })
 export class E2EPage {
-  items: Array<{title: string; id: number}>;
+  items: Array<{id: number, url: string}>;
+  imgDomain = 'http://localhost:8900';
+  responseDelay = 2000;
 
   constructor() {
-    this.fillList();
+    // take a look at the gulp task: test.imageserver
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', `${this.imgDomain}/reset`, true);
+    xhr.onreadystatechange = () => {
+      if (xhr.readyState === 4) {
+        this.fillList();
+      }
+    };
+    xhr.send();
   }
 
   fillList() {
     this.items = [];
     for (let i = 0; i < 500; i++) {
       this.items.push({
-        title: 'Item ' + i,
-        id: i
+        id: i,
+        url: `${this.imgDomain}/?d=${this.responseDelay}&id=${i}`
       });
     }
   }

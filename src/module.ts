@@ -10,12 +10,16 @@ import { HttpModule } from '@angular/http';
 import { ActionSheetController } from './components/action-sheet/action-sheet';
 import { AlertController } from './components/alert/alert';
 import { App } from './components/app/app';
+import { AppRootToken } from './components/app/app-root';
+import { ClickBlock } from './util/click-block';
 import { Config, ConfigToken, setupConfig } from './config/config';
 import { DeepLinker, setupDeepLinker } from './navigation/deep-linker';
+import { DomOp } from './util/dom-operation';
 import { Events, setupProvideEvents } from './util/events';
 import { Form } from './util/form';
 import { GestureController } from './gestures/gesture-controller';
 import { Haptic } from './util/haptic';
+import { ImgLoader } from './components/img/img-loader';
 import { IonicGestureConfig } from './gestures/gesture-config';
 import { Keyboard } from './util/keyboard';
 import { LoadingController } from './components/loading/loading';
@@ -31,9 +35,7 @@ import { ToastController } from './components/toast/toast';
 import { registerModeConfigs } from './config/mode-registry';
 import { registerTransitions } from './transitions/transition-registry';
 import { TransitionController } from './transitions/transition-controller';
-import { AppRootToken } from './components/app/app-root';
 import { UrlSerializer, setupUrlSerializer, DeepLinkConfigToken } from './navigation/url-serializer';
-import { ClickBlock } from './util/click-block';
 /**
  * Import Overlay Entry Components
  */
@@ -51,6 +53,7 @@ import { ToastCmp } from './components/toast/toast-component';
  * Export Providers
  */
 export { Config, setupConfig, ConfigToken } from './config/config';
+export { DomOp } from './util/dom-operation';
 export { Platform, setupPlatform, UserAgentToken, DocumentDirToken, DocLangToken, NavigatorPlatformToken } from './platform/platform';
 export { Haptic } from './util/haptic';
 export { QueryParams, setupQueryParams, UrlToken } from './platform/query-params';
@@ -102,13 +105,13 @@ export { ViewController } from './navigation/view-controller';
   declarations: [
     ActionSheetCmp,
     AlertCmp,
+    ClickBlock,
     IONIC_DIRECTIVES,
     LoadingCmp,
     ModalCmp,
     PickerCmp,
     PopoverCmp,
-    ToastCmp,
-    ClickBlock
+    ToastCmp
   ],
   entryComponents: [
     ActionSheetCmp,
@@ -154,7 +157,7 @@ export class IonicModule {
         // useFactory: ionic app initializers
         { provide: APP_INITIALIZER, useFactory: registerModeConfigs, deps: [ Config ], multi: true },
         { provide: APP_INITIALIZER, useFactory: registerTransitions, deps: [ Config ], multi: true },
-        { provide: APP_INITIALIZER, useFactory: setupProvideEvents, deps: [ Platform ], multi: true },
+        { provide: APP_INITIALIZER, useFactory: setupProvideEvents, deps: [ Platform, DomOp ], multi: true },
         { provide: APP_INITIALIZER, useFactory: setupTapClick, deps: [ Config, App, NgZone, GestureController ], multi: true },
 
         // useClass
@@ -167,10 +170,12 @@ export class IonicModule {
         ActionSheetController,
         AlertController,
         App,
+        DomOp,
         Events,
         Form,
-        Haptic,
         GestureController,
+        Haptic,
+        ImgLoader,
         Keyboard,
         LoadingController,
         Location,

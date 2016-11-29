@@ -190,7 +190,8 @@ $item-md-sliding-content-background: $list-md-background-color !default;
   border-radius: $item-md-avatar-size / 2;
 }
 
-.item-md ion-thumbnail {
+.item-md ion-thumbnail,
+.item-md ion-thumbnail ion-img {
   min-width: $item-md-thumbnail-size;
   min-height: $item-md-thumbnail-size;
 }

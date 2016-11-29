@@ -1,14 +1,19 @@
-import { ChangeDetectionStrategy, Component, ElementRef, Input, NgZone, Optional, Renderer, ViewEncapsulation } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, EventEmitter, Input, NgZone, OnDestroy, AfterViewInit, Optional, Output, Renderer, ViewEncapsulation } from '@angular/core';
 
 import { App } from '../app/app';
-import { Ion } from '../ion';
 import { Config } from '../../config/config';
+import { DomOp } from '../../util/dom-operation';
+import { eventOptions } from '../../util/ui-event-manager';
+import { Img } from '../img/img';
+import { Ion } from '../ion';
+import { isTrueProperty, assert, removeArrayItem } from '../../util/util';
 import { Keyboard } from '../../util/keyboard';
-import { nativeRaf, nativeTimeout, transitionEnd } from '../../util/dom';
 import { ScrollView } from '../../util/scroll-view';
 import { Tabs } from '../tabs/tabs';
+import { transitionEnd } from '../../util/dom';
 import { ViewController } from '../../navigation/view-controller';
-import { isTrueProperty, assert } from '../../util/util';
+
+export { ScrollEvent } from '../../util/scroll-view';
 
 
 /**
@@ -116,12 +121,14 @@ import { isTrueProperty, assert } from '../../util/util';
   changeDetection: ChangeDetectionStrategy.OnPush,
   encapsulation: ViewEncapsulation.None
 })
-export class Content extends Ion {
+export class Content extends Ion implements AfterViewInit, OnDestroy {
   _paddingTop: number;
   _paddingRight: number;
   _paddingBottom: number;
   _paddingLeft: number;
   _scrollPadding: number = 0;
+  _scrollWidth: number;
+  _scrollHeight: number;
   _headerHeight: number;
   _footerHeight: number;
   _tabbarHeight: number;
@@ -131,6 +138,8 @@ export class Content extends Ion {
   _scLsn: Function;
   _sbPadding: boolean;
   _fullscreen: boolean;
+  _lazyLoadImages: boolean = true;
+  _imgs: Img[] = [];
   _footerEle: HTMLElement;
   _dirty: boolean = false;
 
@@ -156,6 +165,32 @@ export class Content extends Ion {
    */
   contentBottom: number;
 
+  /**
+   * @private
+   */
+  @Output() ionScrollStart: EventEmitter<any> = new EventEmitter<any>();
+
+  /**
+   * @private
+   */
+  @Output() ionScroll: EventEmitter<any> = new EventEmitter<any>();
+
+  /**
+   * @private
+   */
+  @Output() ionScrollEnd: EventEmitter<any> = new EventEmitter<any>();
+
+  /**
+   * @private
+   */
+  @Output() readReady: EventEmitter<any> = new EventEmitter<any>();
+
+  /**
+   * @private
+   */
+  @Output() writeReady: EventEmitter<any> = new EventEmitter<any>();
+
+
   constructor(
     config: Config,
     elementRef: ElementRef,
@@ -164,7 +199,8 @@ export class Content extends Ion {
     public _keyboard: Keyboard,
     public _zone: NgZone,
     @Optional() viewCtrl: ViewController,
-    @Optional() public _tabs: Tabs
+    @Optional() public _tabs: Tabs,
+    private _dom: DomOp
   ) {
     super(config, elementRef, renderer, 'content');
 
@@ -179,16 +215,38 @@ export class Content extends Ion {
   /**
    * @private
    */
-  ngOnInit() {
-    let children = this._elementRef.nativeElement.children;
+  ngAfterViewInit() {
+    if (this._scroll) return;
+
+    const children = this._elementRef.nativeElement.children;
     assert(children && children.length >= 2, 'content needs at least two children');
 
     this._fixedEle = children[0];
     this._scrollEle = children[1];
 
-    this._zone.runOutsideAngular(() => {
-      this._scroll = new ScrollView(this._scrollEle);
-      this._scLsn = this.addScrollListener(this._app.setScrolling.bind(this._app));
+    // create a scroll view on the scrollable element
+    this._scroll = new ScrollView(this._scrollEle, this._dom);
+
+    // subscribe to the scroll start
+    this._scroll.scrollStart.subscribe(ev => {
+      this.ionScrollStart.emit(ev);
+      pauseImgs(this._imgs);
+    });
+
+    // subscribe to every scroll move
+    this._scroll.scroll.subscribe(ev => {
+      // remind the app that it's currently scrolling
+      this._app.setScrolling(ev.timeStamp);
+
+      // emit to all of our other friends things be scrolling
+      this.ionScroll.emit(ev);
+    });
+
+    // subscribe to the scroll end
+    this._scroll.scrollEnd.subscribe(ev => {
+      this.ionScrollEnd.emit(ev);
+
+      playImgs(this._imgs, ev.scrollTop, this._scrollHeight, ev.directionY);
     });
   }
 
@@ -198,72 +256,67 @@ export class Content extends Ion {
   ngOnDestroy() {
     this._scLsn && this._scLsn();
     this._scroll && this._scroll.destroy();
-    this._scrollEle = this._footerEle = this._scLsn = this._scroll = null;
-  }
-
-  /**
-   * @private
-   */
-  addScrollListener(handler: any) {
-    return this._addListener('scroll', handler);
+    this._scrollEle = this._fixedEle = this._footerEle = this._scLsn = this._scroll = null;
   }
 
   /**
    * @private
    */
   addTouchStartListener(handler: any) {
-    return this._addListener('touchstart', handler);
+    return this._addListener('touchstart', handler, false);
   }
 
   /**
    * @private
    */
   addTouchMoveListener(handler: any) {
-    return this._addListener('touchmove', handler);
+    return this._addListener('touchmove', handler, true);
   }
 
   /**
    * @private
    */
   addTouchEndListener(handler: any) {
-    return this._addListener('touchend', handler);
+    return this._addListener('touchend', handler, false);
   }
 
   /**
    * @private
    */
   addMouseDownListener(handler: any) {
-    return this._addListener('mousedown', handler);
+    return this._addListener('mousedown', handler, false);
   }
 
   /**
    * @private
    */
   addMouseUpListener(handler: any) {
-    return this._addListener('mouseup', handler);
+    return this._addListener('mouseup', handler, false);
   }
 
   /**
    * @private
    */
   addMouseMoveListener(handler: any) {
-    return this._addListener('mousemove', handler);
+    return this._addListener('mousemove', handler, true);
   }
 
   /**
    * @private
    */
-  _addListener(type: string, handler: any): Function {
+  _addListener(type: string, handler: any, usePassive: boolean): Function {
     assert(handler, 'handler must be valid');
     assert(this._scrollEle, '_scrollEle must be valid');
 
+    const opts = eventOptions(false, usePassive);
+
     // ensure we're not creating duplicates
-    this._scrollEle.removeEventListener(type, handler);
-    this._scrollEle.addEventListener(type, handler);
+    this._scrollEle.removeEventListener(type, handler, opts);
+    this._scrollEle.addEventListener(type, handler, opts);
 
     return () => {
       if (this._scrollEle) {
-        this._scrollEle.removeEventListener(type, handler);
+        this._scrollEle.removeEventListener(type, handler, opts);
       }
     };
   }
@@ -273,42 +326,6 @@ export class Content extends Ion {
    */
   getScrollElement(): HTMLElement {
     return this._scrollEle;
-  }
-
-  /**
-   * @private
-   * Call a method when scrolling has stopped
-   * @param {Function} callback The method you want perform when scrolling has ended
-   */
-  onScrollEnd(callback: Function) {
-    let lastScrollTop: number = null;
-    let framesUnchanged: number = 0;
-    let _scrollEle = this._scrollEle;
-
-    function next() {
-      let currentScrollTop = _scrollEle.scrollTop;
-      if (lastScrollTop !== null) {
-
-        if (Math.round(lastScrollTop) === Math.round(currentScrollTop)) {
-          framesUnchanged++;
-
-        } else {
-          framesUnchanged = 0;
-        }
-
-        if (framesUnchanged > 9) {
-          return callback();
-        }
-      }
-
-      lastScrollTop = currentScrollTop;
-
-      nativeRaf(() => {
-        nativeRaf(next);
-      });
-    }
-
-    nativeTimeout(next, 100);
   }
 
   /**
@@ -372,8 +389,8 @@ export class Content extends Ion {
   /**
    * @private
    */
-  jsScroll(onScrollCallback: Function): Function {
-    return this._scroll.jsScroll(onScrollCallback);
+  enableJsScroll() {
+    this._scroll.enableJsScroll();
   }
 
   /**
@@ -391,6 +408,35 @@ export class Content extends Ion {
   set fullscreen(val: boolean) {
     this._fullscreen = isTrueProperty(val);
   }
+
+  /**
+   * @private
+   */
+  @Input()
+  get lazyLoadImages(): boolean {
+    return !!this._lazyLoadImages;
+  }
+  set lazyLoadImages(val: boolean) {
+    this._lazyLoadImages = isTrueProperty(val);
+  }
+
+  /**
+   * @private
+   */
+  addImg(img: Img) {
+    this._imgs.push(img);
+  }
+
+  /**
+   * @private
+   */
+  removeImg(img: Img) {
+    removeArrayItem(this._imgs, img);
+  }
+
+  /**
+   * @private
+   */
 
   /**
    * @private
@@ -475,10 +521,8 @@ export class Content extends Ion {
    * after dynamically adding headers, footers, or tabs.
    */
   resize() {
-    nativeRaf(() => {
-      this.readDimensions();
-      this.writeDimensions();
-    });
+    this._dom.read(this.readDimensions, this);
+    this._dom.write(this.writeDimensions, this);
   }
 
   /**
@@ -494,6 +538,8 @@ export class Content extends Ion {
     let cacheFooterHeight = this._footerHeight;
     let cacheTabsPlacement = this._tabsPlacement;
 
+    this._scrollWidth = 0;
+    this._scrollHeight = 0;
     this._paddingTop = 0;
     this._paddingRight = 0;
     this._paddingBottom = 0;
@@ -516,6 +562,9 @@ export class Content extends Ion {
       ele = <HTMLElement>children[i];
       tagName = ele.tagName;
       if (tagName === 'ION-CONTENT') {
+        this._scrollWidth = ele.scrollWidth;
+        this._scrollHeight = ele.scrollHeight;
+
         if (this._fullscreen) {
           computedStyle = getComputedStyle(ele);
           this._paddingTop = parsePxUnit(computedStyle.paddingTop);
@@ -560,6 +609,8 @@ export class Content extends Ion {
       cacheFooterHeight !== this._footerHeight ||
       cacheTabsPlacement !== this._tabsPlacement
     );
+
+    this.readReady.emit();
   }
 
   /**
@@ -572,13 +623,14 @@ export class Content extends Ion {
       return;
     }
 
-    let scrollEle = this._scrollEle as any;
+    const scrollEle = this._scrollEle as any;
+
     if (!scrollEle) {
       assert(false, 'this._scrollEle should be valid');
       return;
     }
 
-    let fixedEle = this._fixedEle;
+    const fixedEle = this._fixedEle;
     if (!fixedEle) {
       assert(false, 'this._fixedEle should be valid');
       return;
@@ -655,8 +707,82 @@ export class Content extends Ion {
         this._tabs.setTabbarPosition(-1, 0);
       }
     }
+
+    this.writeReady.emit();
   }
 
+}
+
+function pauseImgs(imgs: Img[]) {
+  // all images should be paused
+  for (var i = 0; i < imgs.length; i++) {
+    imgs[i].pause();
+  }
+}
+
+function playImgs(imgs: Img[], scrollTop: number, scrollHeight: number, directionY: string) {
+  const scrollBottom = (scrollTop + scrollHeight);
+  const requests: Img[] = [];
+  let img: Img;
+
+  for (var i = 0; i < imgs.length; i++) {
+    img = imgs[i];
+
+    if (directionY === 'up') {
+      // scrolling up
+      if (img.top > scrollBottom) {
+        // scrolling up and the top of the image
+        // is below the scrollable bottom, so let's abort
+        img.abort();
+
+      } else if (img.bottom > scrollTop - scrollHeight) {
+        requests.push(img);
+      }
+
+    } else {
+      // scrolling down
+      if (img.bottom < scrollTop) {
+        // scrolling down and bottom of the image
+        // is above the scrollable top, so let's abort
+        img.abort();
+
+      } else if (img.top < scrollBottom + scrollHeight) {
+        requests.push(img);
+      }
+    }
+  }
+
+  let imgRequestOrder: Img[];
+  if (directionY === 'up') {
+    // scrolling up
+    // first get all the viewable images sorted top to bottom
+    imgRequestOrder = requests.filter(i => i.bottom > scrollTop).sort(sortTopToBottom);
+
+    // then get all the images above the viewable area and
+    // request them in revers order so the lower ones show first
+    imgRequestOrder = imgRequestOrder.concat(requests.filter(i => i.bottom <= scrollTop).sort(sortTopToBottom).reverse());
+
+  } else {
+    // scrolling down
+    // sorting all images from top to bottom
+    imgRequestOrder = requests.sort(sortTopToBottom);
+  }
+
+  // kick off all the imgs in the order we'd like them
+  let requestIndex = 0;
+  for (var i = 0; i < imgRequestOrder.length; i++) {
+    requestIndex = imgRequestOrder[i].play(requestIndex);
+  }
+}
+
+function sortTopToBottom(a: Img, b: Img) {
+  if (a.top < b.top) {
+    return -1;
+  }
+  if (a.top > b.top) {
+    return 1;
+  }
+  return 0;
 }
 
 function parsePxUnit(val: string): number {

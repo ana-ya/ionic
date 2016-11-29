@@ -3,6 +3,13 @@
 // Img
 // --------------------------------------------------
 
+/// @prop - Color of the image when it hasn't fully loaded yet
+$img-placeholder-background:         #eee !default;
+
+/// @prop - The number of milliseconds it should take to fade in a loaded image
+$img-placeholder-fade-in:            150ms !default;
+
+
 ion-img {
   position: relative;
   display: flex;
@@ -10,13 +17,15 @@ ion-img {
 
   align-items: center;
   justify-content: center;
+
+  contain: content;
 }
 
 ion-img img {
   flex-shrink: 0;
 }
 
-ion-img .img-placeholder {
+.img-placeholder {
   position: absolute;
   top: 0;
   left: 0;
@@ -24,11 +33,28 @@ ion-img .img-placeholder {
   width: 100%;
   height: 100%;
 
-  background: #eee;
-
-  transition: opacity 200ms;
+  pointer-events: none;
 }
 
-ion-img.img-loaded .img-placeholder {
+.img-placeholder::before,
+.img-placeholder::after {
+  position: absolute;
+  top: 0;
+  left: 0;
+
+  width: 100%;
+  height: 100%;
+
+  background: $img-placeholder-background;
+
+  content: "";
+}
+
+.img-placeholder::after {
+  transition: opacity $img-placeholder-fade-in;
+}
+
+.img-loaded .img-placeholder::before,
+.img-loaded .img-placeholder::after {
   opacity: 0;
 }
