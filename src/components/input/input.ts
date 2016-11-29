@@ -4,7 +4,7 @@ import { NgControl } from '@angular/forms';
 import { App } from '../app/app';
 import { Config } from '../../config/config';
 import { Content } from '../content/content';
-import { DomOp } from '../../util/dom-operation';
+import { DomController } from '../../util/dom-controller';
 import { Form } from '../../util/form';
 import { InputBase } from './input-base';
 import { isTrueProperty } from '../../util/util';
@@ -93,7 +93,7 @@ export class TextInput extends InputBase {
     @Optional() scrollView: Content,
     @Optional() nav: NavController,
     @Optional() ngControl: NgControl,
-    dom: DomOp
+    dom: DomController
   ) {
     super(config, form, item, app, platform, elementRef, renderer, scrollView, nav, ngControl, dom);
 
@@ -319,7 +319,7 @@ export class TextArea extends InputBase {
     @Optional() scrollView: Content,
     @Optional() nav: NavController,
     @Optional() ngControl: NgControl,
-    dom: DomOp
+    dom: DomController
   ) {
     super(config, form, item, app, platform, elementRef, renderer, scrollView, nav, ngControl, dom);
 

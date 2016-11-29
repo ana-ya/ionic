@@ -2,7 +2,7 @@ import { Subject } from 'rxjs/Subject';
 
 import { assert } from './util';
 import { CSS, pointerCoord, rafFrames } from './dom';
-import { DomOp } from './dom-operation';
+import { DomController } from './dom-controller';
 import { eventOptions, listenEvent } from './ui-event-manager';
 
 
@@ -20,7 +20,7 @@ export class ScrollView {
   private _ev: ScrollEvent = {};
 
 
-  constructor(ele: HTMLElement, private _dom: DomOp) {
+  constructor(ele: HTMLElement, private _dom: DomController) {
     assert(ele, 'scroll-view, element can not be null');
     this._el = ele;
     this.enableNativeScrolling();

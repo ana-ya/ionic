@@ -1,7 +1,7 @@
 import { Directive, ElementRef, EventEmitter, Host, Input, NgZone, Output } from '@angular/core';
 
 import { Content, ScrollEvent } from '../content/content';
-import { DomOp } from '../../util/dom-operation';
+import { DomController } from '../../util/dom-controller';
 
 
 /**
@@ -158,7 +158,7 @@ export class InfiniteScroll {
     @Host() private _content: Content,
     private _zone: NgZone,
     private _elementRef: ElementRef,
-    private _dom: DomOp
+    private _dom: DomController
   ) {
     _content.setElementClass('has-infinite-scroll', true);
   }

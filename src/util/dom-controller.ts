@@ -7,7 +7,7 @@ import { nativeRaf } from './dom';
 import { removeArrayItem } from './util';
 
 
-export class DomOp {
+export class DomController {
   private r: Function[] = [];
   private w: Function[] = [];
   private q: boolean;

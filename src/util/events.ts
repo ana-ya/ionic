@@ -1,4 +1,4 @@
-import { DomOp } from '../util/dom-operation';
+import { DomController } from '../util/dom-controller';
 import { nativeTimeout, nativeRaf } from '../util/dom';
 import { Platform } from '../platform/platform';
 import { ScrollView } from '../util/scroll-view';
@@ -110,7 +110,7 @@ export class Events {
 /**
  * @private
  */
-export function setupEvents(platform: Platform, dom: DomOp): Events {
+export function setupEvents(platform: Platform, dom: DomController): Events {
   const events = new Events();
 
   // start listening for resizes XXms after the app starts
@@ -174,7 +174,7 @@ export function setupEvents(platform: Platform, dom: DomOp): Events {
 /**
  * @private
  */
-export function setupProvideEvents(platform: Platform, dom: DomOp) {
+export function setupProvideEvents(platform: Platform, dom: DomController) {
   return function() {
     return setupEvents(platform, dom);
   };

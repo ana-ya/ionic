@@ -4,7 +4,7 @@ import { adjustRendered, calcDimensions, estimateHeight, initReadNodes, processR
 import { nativeRaf } from '../../util/dom';
 import { Config } from '../../config/config';
 import { Content, ScrollEvent } from '../content/content';
-import { DomOp } from '../../util/dom-operation';
+import { DomController } from '../../util/dom-controller';
 import { isBlank, isFunction, isPresent } from '../../util/util';
 import { Platform } from '../../platform/platform';
 import { ViewController } from '../../navigation/view-controller';
@@ -348,7 +348,7 @@ export class VirtualScroll implements DoCheck, AfterContentInit, OnDestroy {
     private _platform: Platform,
     @Optional() private _ctrl: ViewController,
     config: Config,
-    private _dom: DomOp) {
+    private _dom: DomController) {
 
     _content.readReady.subscribe(() => {
       this.readUpdate(true, true);

@@ -14,7 +14,7 @@ import { AppRootToken } from './components/app/app-root';
 import { ClickBlock } from './util/click-block';
 import { Config, ConfigToken, setupConfig } from './config/config';
 import { DeepLinker, setupDeepLinker } from './navigation/deep-linker';
-import { DomOp } from './util/dom-operation';
+import { DomController } from './util/dom-controller';
 import { Events, setupProvideEvents } from './util/events';
 import { Form } from './util/form';
 import { GestureController } from './gestures/gesture-controller';
@@ -53,7 +53,7 @@ import { ToastCmp } from './components/toast/toast-component';
  * Export Providers
  */
 export { Config, setupConfig, ConfigToken } from './config/config';
-export { DomOp } from './util/dom-operation';
+export { DomController } from './util/dom-controller';
 export { Platform, setupPlatform, UserAgentToken, DocumentDirToken, DocLangToken, NavigatorPlatformToken } from './platform/platform';
 export { Haptic } from './util/haptic';
 export { QueryParams, setupQueryParams, UrlToken } from './platform/query-params';
@@ -157,7 +157,7 @@ export class IonicModule {
         // useFactory: ionic app initializers
         { provide: APP_INITIALIZER, useFactory: registerModeConfigs, deps: [ Config ], multi: true },
         { provide: APP_INITIALIZER, useFactory: registerTransitions, deps: [ Config ], multi: true },
-        { provide: APP_INITIALIZER, useFactory: setupProvideEvents, deps: [ Platform, DomOp ], multi: true },
+        { provide: APP_INITIALIZER, useFactory: setupProvideEvents, deps: [ Platform, DomController ], multi: true },
         { provide: APP_INITIALIZER, useFactory: setupTapClick, deps: [ Config, App, NgZone, GestureController ], multi: true },
 
         // useClass
@@ -170,7 +170,7 @@ export class IonicModule {
         ActionSheetController,
         AlertController,
         App,
-        DomOp,
+        DomController,
         Events,
         Form,
         GestureController,

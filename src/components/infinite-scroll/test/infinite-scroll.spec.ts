@@ -1,6 +1,6 @@
 import { Content, ScrollEvent } from '../../content/content';
 import { InfiniteScroll } from '../infinite-scroll';
-import { mockDomOp, mockConfig, mockElementRef, mockRenderer, mockZone } from '../../../util/mock-providers';
+import { mockConfig, mockDomController, mockElementRef, mockRenderer, mockZone } from '../../../util/mock-providers';
 
 
 describe('Infinite Scroll', () => {
@@ -100,12 +100,12 @@ describe('Infinite Scroll', () => {
 
   beforeEach(() => {
     contentElementRef = mockElementRef();
-    content = new Content(config, contentElementRef, mockRenderer(), null, null, null, null, null, mockDomOp());
+    content = new Content(config, contentElementRef, mockRenderer(), null, null, null, null, null, mockDomController());
     content._scrollEle = document.createElement('div');
     content._scrollEle.className = 'scroll-content';
 
     infiniteElementRef = mockElementRef();
-    inf = new InfiniteScroll(content, mockZone(), infiniteElementRef, mockDomOp());
+    inf = new InfiniteScroll(content, mockZone(), infiniteElementRef, mockDomController());
   });
 
   function setInfiniteScrollTop(scrollTop) {

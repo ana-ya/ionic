@@ -5,7 +5,7 @@ import { App } from '../app/app';
 import { copyInputAttributes, PointerCoordinates, hasPointerMoved, pointerCoord }  from '../../util/dom';
 import { Config } from '../../config/config';
 import { Content, ContentDimensions, ScrollEvent } from '../content/content';
-import { DomOp } from '../../util/dom-operation';
+import { DomController } from '../../util/dom-controller';
 import { Form, IonicFormInput } from '../../util/form';
 import { Ion } from '../ion';
 import { isTrueProperty } from '../../util/util';
@@ -55,7 +55,7 @@ export class InputBase extends Ion implements IonicFormInput {
     protected _content: Content,
     nav: NavController,
     ngControl: NgControl,
-    protected _dom: DomOp
+    protected _dom: DomController
   ) {
     super(config, elementRef, renderer, 'input');
 

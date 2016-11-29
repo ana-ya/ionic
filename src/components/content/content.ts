@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, ElementRef, EventEmitter, Input, Ng
 
 import { App } from '../app/app';
 import { Config } from '../../config/config';
-import { DomOp } from '../../util/dom-operation';
+import { DomController } from '../../util/dom-controller';
 import { eventOptions } from '../../util/ui-event-manager';
 import { Img } from '../img/img';
 import { Ion } from '../ion';
@@ -200,7 +200,7 @@ export class Content extends Ion implements AfterViewInit, OnDestroy {
     public _zone: NgZone,
     @Optional() viewCtrl: ViewController,
     @Optional() public _tabs: Tabs,
-    private _dom: DomOp
+    private _dom: DomController
   ) {
     super(config, elementRef, renderer, 'content');
 

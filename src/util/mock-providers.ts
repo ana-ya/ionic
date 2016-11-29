@@ -6,7 +6,7 @@ import { App } from '../components/app/app';
 import { Config } from '../config/config';
 import { Content } from '../components/content/content';
 import { DeepLinker } from '../navigation/deep-linker';
-import { DomOp } from './dom-operation';
+import { DomController } from './dom-controller';
 import { GestureController } from '../gestures/gesture-controller';
 import { Haptic } from './haptic';
 import { IonicApp } from '../components/app/app-root';
@@ -33,7 +33,7 @@ export const mockConfig = function(config?: any, url: string = '/', platform?: P
   return c;
 };
 
-export const mockDomOp = function(): DomOp {
+export const mockDomController = function(): DomController {
   const dom: any = {
     read: function(fn: Function, ctx?: any) {},
     write: function(fn: Function, ctx?: any) {},
@@ -82,7 +82,7 @@ export const mockTrasitionController = function(config: Config) {
 };
 
 export const mockContent = function(): Content {
-  return new Content(mockConfig(), mockElementRef(), mockRenderer(), null, null, mockZone(), null, null, mockDomOp());
+  return new Content(mockConfig(), mockElementRef(), mockRenderer(), null, null, mockZone(), null, null, mockDomController());
 };
 
 export const mockZone = function(): NgZone {

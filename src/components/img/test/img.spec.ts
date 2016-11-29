@@ -2,7 +2,7 @@ import { ElementRef, Renderer } from '@angular/core';
 import { Content } from '../../content/content';
 import { Img, isValidSrc, ImgState } from '../img';
 import { ImgLoader, ImgResponseMessage } from '../img-loader';
-import { mockContent, mockDomOp, mockElementRef, mockPlatform, mockRenderer, mockZone } from '../../../util/mock-providers';
+import { mockContent, mockDomController, mockElementRef, mockPlatform, mockRenderer, mockZone } from '../../../util/mock-providers';
 import { Platform } from '../../../platform/platform';
 
 
@@ -467,7 +467,7 @@ describe('Img', () => {
     elementRef = mockElementRef();
     renderer = mockRenderer();
     platform = mockPlatform();
-    img = new Img(loader, elementRef, renderer, platform, mockZone(), content, mockDomOp());
+    img = new Img(loader, elementRef, renderer, platform, mockZone(), content, mockDomController());
   });
 
 });

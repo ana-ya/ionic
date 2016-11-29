@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, ElementRef, HostBinding, Input, NgZone, OnDestroy, OnInit, Optional, Renderer, ViewChild, ViewEncapsulation } from '@angular/core';
 
 import { Content } from '../content/content';
-import { DomOp } from '../../util/dom-operation';
+import { DomController } from '../../util/dom-controller';
 import { ImgLoader, ImgResponseMessage } from './img-loader';
 import { isPresent, isTrueProperty } from '../../util/util';
 import { nativeTimeout } from '../../util/dom';
@@ -56,7 +56,7 @@ export class Img implements OnDestroy, OnInit {
     private _platform: Platform,
     private _zone: NgZone,
     @Optional() private _content: Content,
-    private _dom: DomOp
+    private _dom: DomController
   ) {
     this._loaded(false);
     this._content && this._content.addImg(this);
